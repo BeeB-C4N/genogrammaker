@@ -512,7 +512,8 @@
         });
 
         window.addEventListener('mouseup', () => {
-            if (state.currentTool !== 'select' && state.isDrawing || state.dragTarget) {
+            // 配置や描画が終わってマウスを離したら、常に選択ツールに戻す
+            if (state.currentTool !== 'select') {
                 changeTool('select');
             }
             state.isDragging = false; state.isResizing = false; state.isDrawing = false;
