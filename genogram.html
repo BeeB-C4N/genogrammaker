@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genogram Maker Professional (Offline)</title>
+    <style>
+        /* --- 完全オフライン用 CSS --- */
+        :root {
+            --bg-color: #f8fafc;
+            --header-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #3b82f6;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; background-color: var(--bg-color); color: var(--text-main); user-select: none; touch-action: none; }
+        
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--header-bg); border-bottom: 1px solid var(--border-color); z-index: 30; }
+        .header-title { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 1.1rem; }
+        .header-actions { display: flex; gap: 8px; }
+        .btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; font-size: 14px; cursor: pointer; border: 1px solid transparent; }
+        .btn-dark { background: #1e293b; color: white; }
+        .btn-dark:hover { background: #0f172a; }
+        .btn-outline { background: white; border-color: var(--border-color); color: var(--text-main); }
+        .btn-outline:hover { background: var(--bg-color); }
+
+        /* Layout */
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        
+        /* Toolbar (Sidebar) */
+        .sidebar { width: 92px; background: white; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 6px; overflow-y: auto; z-index: 20; }
+        .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; padding: 0 8px; }
+        .tool-btn { width: 100%; height: 36px; display: flex; justify-content: center; align-items: center; border: none; background: #f1f5f9; border-radius: 8px; cursor: pointer; color: var(--text-muted); }
+        .tool-btn:hover { background: #e2e8f0; }
+        .tool-btn.active-tool { background: var(--primary); color: white; }
+        .tool-btn.w-full { grid-column: span 2; }
+        .tool-icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .divider { width: 40px; height: 1px; background: var(--border-color); margin: 4px 0; }
+        .btn-danger { color: var(--danger); background: #fef2f2; }
+        .btn-danger:hover { background: #fee2e2; }
+
+        /* Canvas */
+        .canvas-area { position: relative; flex: 1; background-color: white; overflow: hidden; }
+        .canvas-container { width: 100%; height: 100%; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 25px 25px; cursor: crosshair; }
+
+        /* Property Panel */
+        .prop-panel { position: absolute; top: 16px; right: 16px; background: white; padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 280px; z-index: 40; max-height: calc(100vh - 40px); overflow-y: auto; }
+        .prop-panel h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 16px; }
+        .prop-group { margin-bottom: 12px; }
+        .prop-label { display: block; font-size: 10px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
+        .prop-input { width: 100%; border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px; font-size: 14px; outline: none; }
+        .prop-input:focus { border-color: var(--primary); }
+        .prop-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-title text-blue-600">
+            <svg class="tool-icon" style="color: #3b82f6;" viewBox="0 0 24 24"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>
+            <span style="color: var(--text-main);">ジェノグラム・メーカー Pro</span>
+        </div>
+        <div class="header-actions">
+            <input type="text" id="exportName" placeholder="氏名を入力" style="padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; width: 150px;">
+            <button id="btnExport" class="btn btn-dark">
+                <svg class="tool-icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 保存
+            </button>
+            <button id="btnImport" class="btn btn-outline">
+                <svg class="tool-icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> 読み込み
+            </button>
+            <input type="file" id="fileInput" class="hidden" accept=".json">
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Sidebar Toolbar -->
+        <aside class="sidebar">
+            <div class="tool-grid" style="grid-template-columns: 1fr;">
+                <button data-tool="select" class="tool-btn active-tool" title="選択・編集">
+                    <svg class="tool-icon" viewBox="0 0 24 24"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+                </button>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <!-- 基本図形 -->
+            <div class="tool-grid">
+                <button data-tool="square" class="tool-btn" title="男性"><svg class="tool-icon" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></button>
+                <button data-tool="circle" class="tool-btn" title="女性"><svg class="tool-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></button>
+                <button data-tool="unknown" class="tool-btn" title="性別不明"><svg class="tool-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="6"/></svg></button>
+                <button data-tool="triangle" class="tool-btn" title="妊娠"><svg class="tool-icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/></svg></button>
+            </div>
+
+            <!-- 本人・物故者 -->
+            <div class="tool-grid">
+                <button data-tool="indexsq" class="tool-btn" title="本人(男)"><svg class="tool-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"/><rect x="7" y="7" width="10" height="10"/></svg></button>
+                <button data-tool="indexci" class="tool-btn" title="本人(女)"><svg class="tool-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg></button>
+                <button data-tool="decsq" class="tool-btn" title="死亡男性"><svg class="tool-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"/><path d="M3 3l18 18M21 3L3 21"/></svg></button>
+                <button data-tool="decci" class="tool-btn" title="死亡女性"><svg class="tool-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.64 5.64l12.72 12.72M18.36 5.64L5.64 18.36"/></svg></button>
+            </div>
+
+            <!-- その他記号 -->
+            <div class="tool-grid">
+                <button data-tool="filledci" class="tool-btn" title="流産・死産 (塗りつぶし)"><svg class="tool-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/></svg></button>
+                <button data-tool="cross" class="tool-btn" title="中絶 (×)"><svg class="tool-icon" viewBox="0 0 24 24"><path d="M4 4l16 16M20 4L4 20"/></svg></button>
+                <button data-tool="diamond" class="tool-btn" title="ペット"><svg class="tool-icon" viewBox="0 0 24 24"><path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"/></svg></button>
+                <button data-tool="doubleslash" class="tool-btn" title="二重斜線 (//)"><svg class="tool-icon" viewBox="0 0 24 24"><path d="M9 20L15 4M13 20l6-16"/></svg></button>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <!-- 線・自由記述 -->
+            <div class="tool-grid" style="grid-template-columns: 1fr;">
+                <button data-tool="line" class="tool-btn w-full" title="関係線"><svg class="tool-icon" viewBox="0 0 24 24"><line x1="5" x2="19" y1="12" y2="12"/></svg></button>
+                <button data-tool="scribble" class="tool-btn w-full" title="自由曲線"><svg class="tool-icon" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+                <button data-tool="text" class="tool-btn w-full" title="テキスト"><svg class="tool-icon" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg></button>
+            </div>
+
+            <div style="flex:1;"></div>
+            <div class="tool-grid" style="grid-template-columns: 1fr; margin-bottom: 8px;">
+                <button id="btnDelete" class="tool-btn btn-danger w-full" title="選択要素を削除"><svg class="tool-icon" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+            </div>
+        </aside>
+
+        <!-- Main Canvas -->
+        <main class="canvas-area">
+            <svg id="svgCanvas" class="canvas-container absolute inset-0 w-full h-full cursor-crosshair">
+                <g id="lineGroup"></g>
+                <g id="scribbleGroup"></g>
+                <g id="shapeGroup"></g>
+            </svg>
+
+            <!-- Expanded Property Editor -->
+            <div id="propEditor" class="prop-panel hidden">
+                <h3><svg class="tool-icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><line x1="4" x2="20" y1="21" y2="21"/><line x1="4" x2="20" y1="14" y2="14"/><line x1="4" x2="20" y1="7" y2="7"/></svg> 要素の設定</h3>
+                
+                <div class="prop-group" id="textFieldsGroup">
+                    <label class="prop-label">テキスト / ラベル</label>
+                    <input type="text" id="propText" class="prop-input" placeholder="名前やメモを入力">
+                </div>
+
+                <div class="prop-group" id="ageField">
+                    <label class="prop-label">年齢 (図形の中)</label>
+                    <input type="text" id="propAge" class="prop-input" placeholder="例: 12">
+                </div>
+
+                <div class="prop-row prop-group">
+                    <div id="sizeField">
+                        <label class="prop-label">大きさ</label>
+                        <input type="range" id="propSize" min="10" max="150" step="1" style="width: 100%;">
+                    </div>
+                    <div id="thicknessField">
+                        <label class="prop-label">線の太さ</label>
+                        <input type="range" id="propThickness" min="1" max="10" step="1" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div class="prop-row prop-group">
+                    <div id="fontSizeField">
+                        <label class="prop-label">文字サイズ</label>
+                        <input type="number" id="propFontSize" min="8" max="72" class="prop-input">
+                    </div>
+                    <div id="fontWeightField">
+                        <label class="prop-label">文字の太さ</label>
+                        <select id="propFontWeight" class="prop-input">
+                            <option value="normal">標準</option>
+                            <option value="bold">太字</option>
+                            <option value="900">極太</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="prop-group">
+                    <label class="prop-label">色</label>
+                    <input type="color" id="propColor" class="prop-input" style="height: 32px; padding: 2px; cursor: pointer;">
+                </div>
+
+                <div class="prop-group hidden" id="lineStyles">
+                    <label class="prop-label">線・曲線の種類</label>
+                    <select id="propLineStyle" class="prop-input">
+                        <option value="solid">単線 (実線)</option>
+                        <option value="dashed">破線</option>
+                        <option value="dotted">点線</option>
+                        <option value="double">二重線 (関係線のみ)</option>
+                        <option value="divorce">離婚・二重斜線 (関係線のみ)</option>
+                        <option value="separation">別居・一重斜線 (関係線のみ)</option>
+                        <option value="conflict">対立・ギザギザ (関係線のみ)</option>
+                    </select>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let state = {
+            currentTool: 'select',
+            elements: [], 
+            // Element shape: { id, type, x, y, w, h, x2, y2, text, age, style, color, thickness, fontSize, fontWeight, points: [] }
+            selectedId: null,
+            isDragging: false,
+            isResizing: false,
+            isDrawing: false,
+            dragTarget: null,
+            dragOffset: { x: 0, y: 0 },
+            nextId: Date.now()
+        };
+
+        const svg = document.getElementById('svgCanvas');
+        const shapeGroup = document.getElementById('shapeGroup');
+        const lineGroup = document.getElementById('lineGroup');
+        const scribbleGroup = document.getElementById('scribbleGroup');
+        const propEditor = document.getElementById('propEditor');
+
+        // Inputs
+        const inputs = {
+            text: document.getElementById('propText'),
+            age: document.getElementById('propAge'),
+            size: document.getElementById('propSize'),
+            color: document.getElementById('propColor'),
+            thickness: document.getElementById('propThickness'),
+            fontSize: document.getElementById('propFontSize'),
+            fontWeight: document.getElementById('propFontWeight'),
+            lineStyle: document.getElementById('propLineStyle')
+        };
+
+        function changeTool(toolName) {
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active-tool'));
+            const btn = document.querySelector(`.tool-btn[data-tool="${toolName}"]`);
+            if(btn) btn.classList.add('active-tool');
+            state.currentTool = toolName;
+            svg.style.cursor = toolName === 'select' ? 'default' : 'crosshair';
+        }
+
+        // --- Core Rendering Logic ---
+        function render() {
+            shapeGroup.innerHTML = '';
+            lineGroup.innerHTML = '';
+            scribbleGroup.innerHTML = '';
+            state.elements.forEach(el => {
+                if (el.type === 'line') renderLine(el);
+                else if (el.type === 'scribble') renderScribble(el);
+                else renderShape(el);
+            });
+            updateEditorUI();
+        }
+
+        function createSVGElement(tag, attrs) {
+            const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+            for (let k in attrs) el.setAttribute(k, attrs[k]);
+            return el;
+        }
+
+        function renderShape(el) {
+            const g = createSVGElement("g", { "class": "cursor-move", "data-id": el.id, "style": "cursor: move;" });
+            const w = el.w || 50; const h = el.h || 50;
+            const color = el.color || "#000000"; const thick = el.thickness || 2;
+            const fw = el.fontWeight || "normal"; const fs = el.fontSize || 16;
+
+            let shape;
+            const isFilled = el.type === 'filledci' || el.type === 'filledsq';
+
+            // Base Shapes
+            if (el.type.includes('sq') || el.type === 'square' || el.type === 'filledsq') {
+                shape = createSVGElement("rect", { x: el.x, y: el.y, width: w, height: h });
+            } else if (el.type.includes('ci') || el.type === 'circle' || el.type === 'filledci') {
+                shape = createSVGElement("ellipse", { cx: el.x + w/2, cy: el.y + h/2, rx: w/2, ry: h/2 });
+            } else if (el.type === 'unknown') {
+                shape = createSVGElement("rect", { x: el.x, y: el.y, width: w, height: h, rx: w*0.3, ry: h*0.3 });
+            } else if (el.type === 'triangle') {
+                shape = createSVGElement("path", { d: `M ${el.x + w/2} ${el.y} L ${el.x + w} ${el.y + h} L ${el.x} ${el.y + h} Z` });
+            } else if (el.type === 'diamond') {
+                shape = createSVGElement("path", { d: `M ${el.x + w/2} ${el.y} L ${el.x + w} ${el.y + h/2} L ${el.x + w/2} ${el.y + h} L ${el.x} ${el.y + h/2} Z` });
+            } else if (el.type === 'cross') { // 中絶
+                shape = createSVGElement("g", {});
+                shape.appendChild(createSVGElement("line", { x1: el.x, y1: el.y, x2: el.x+w, y2: el.y+h, stroke: color, "stroke-width": thick }));
+                shape.appendChild(createSVGElement("line", { x1: el.x+w, y1: el.y, x2: el.x, y2: el.y+h, stroke: color, "stroke-width": thick }));
+            } else if (el.type === 'doubleslash') { // 二重斜線スタンプ
+                shape = createSVGElement("g", {});
+                shape.appendChild(createSVGElement("line", { x1: el.x+w*0.3, y1: el.y+h, x2: el.x+w*0.7, y2: el.y, stroke: color, "stroke-width": thick }));
+                shape.appendChild(createSVGElement("line", { x1: el.x+w*0.6, y1: el.y+h, x2: el.x+w*1.0, y2: el.y, stroke: color, "stroke-width": thick }));
+            } else if (el.type === 'text') {
+                shape = createSVGElement("text", { x: el.x, y: el.y, "font-size": `${fs}px`, "font-weight": fw, fill: color });
+                shape.textContent = el.text || "テキスト";
+            }
+
+            // Styling for standard shapes
+            if (el.type !== 'text' && el.type !== 'cross' && el.type !== 'doubleslash') {
+                shape.setAttribute("fill", isFilled ? color : "white");
+                shape.setAttribute("stroke", color);
+                shape.setAttribute("stroke-width", thick);
+                g.appendChild(shape);
+
+                // Handle Index Person (Double Border)
+                if (el.type.startsWith('index')) {
+                    const offset = thick + 3;
+                    let inner;
+                    if (el.type === 'indexsq') {
+                        inner = createSVGElement("rect", { x: el.x+offset, y: el.y+offset, width: Math.max(0, w-offset*2), height: Math.max(0, h-offset*2) });
+                    } else {
+                        inner = createSVGElement("ellipse", { cx: el.x+w/2, cy: el.y+h/2, rx: Math.max(0, w/2-offset), ry: Math.max(0, h/2-offset) });
+                    }
+                    inner.setAttribute("fill", "none"); inner.setAttribute("stroke", color); inner.setAttribute("stroke-width", thick);
+                    g.appendChild(inner);
+                }
+
+                // Handle Deceased (Cross lines)
+                if (el.type.startsWith('dec')) {
+                    g.appendChild(createSVGElement("line", { x1: el.x, y1: el.y, x2: el.x+w, y2: el.y+h, stroke: color, "stroke-width": thick }));
+                    g.appendChild(createSVGElement("line", { x1: el.x+w, y1: el.y, x2: el.x, y2: el.y+h, stroke: color, "stroke-width": thick }));
+                }
+
+                // Inner Age Text
+                if (el.age) {
+                    const ageText = createSVGElement("text", { x: el.x+w/2, y: el.y+h/2+fs*0.35, "text-anchor": "middle", "font-size": `${fs}px`, "font-weight": fw, fill: isFilled ? "white" : color, "pointer-events": "none" });
+                    ageText.textContent = el.age;
+                    g.appendChild(ageText);
+                }
+            } else {
+                g.appendChild(shape);
+            }
+
+            // Exterior Text (Label)
+            if (el.type !== 'text') {
+                if (el.text) {
+                    const t = createSVGElement("text", { x: el.x+w/2, y: el.y+h + 16, "text-anchor": "middle", "font-size": "12px", "font-weight": fw, fill: color });
+                    t.textContent = el.text; g.appendChild(t);
+                }
+            }
+
+            // Selection Indicators & Resizer
+            if (state.selectedId === el.id) {
+                const box = createSVGElement("rect", { x: el.x-5, y: el.y-5, width: w+10, height: h+10, fill: "none", stroke: "#3b82f6", "stroke-width": "1", "stroke-dasharray": "4" });
+                g.appendChild(box);
+                
+                if (el.type !== 'text') {
+                    const hnd = createSVGElement("rect", { x: el.x+w-4, y: el.y+h-4, width: 8, height: 8, fill: "#3b82f6", "data-role": "resizer", "style": "cursor: nwse-resize;" });
+                    g.appendChild(hnd);
+                }
+            }
+
+            shapeGroup.appendChild(g);
+        }
+
+        function renderLine(el) {
+            const g = createSVGElement("g", { "data-id": el.id });
+            const color = el.color || "#000000"; const thick = el.thickness || 2;
+
+            const drawPath = (ox = 0, oy = 0) => {
+                const path = createSVGElement("path", { fill: "none", stroke: color, "stroke-width": thick });
+                let d = `M ${el.x+ox} ${el.y+oy} L ${el.x2+ox} ${el.y2+oy}`;
+                
+                if (el.style === 'conflict') {
+                    const dx = el.x2 - el.x; const dy = el.y2 - el.y;
+                    const len = Math.sqrt(dx*dx + dy*dy); const steps = Math.floor(len / 8);
+                    let z = `M ${el.x} ${el.y}`;
+                    for(let i=1; i<=steps; i++){
+                        const t = i/steps; const px = el.x + dx*t; const py = el.y + dy*t;
+                        const off = 6 * (i%2 === 0 ? 1 : -1);
+                        z += ` L ${px + -dy/len*off} ${py + dx/len*off}`;
+                    }
+                    d = z + ` L ${el.x2} ${el.y2}`;
+                }
+                path.setAttribute("d", d);
+                if (el.style === 'dashed') path.setAttribute("stroke-dasharray", "8,5");
+                if (el.style === 'dotted') path.setAttribute("stroke-dasharray", "2,4");
+                return path;
+            };
+
+            g.appendChild(drawPath());
+
+            if (el.style === 'double') {
+                const angle = Math.atan2(el.y2 - el.y, el.x2 - el.x) + Math.PI/2;
+                g.appendChild(drawPath(Math.cos(angle)*5, Math.sin(angle)*5));
+            }
+
+            if (el.style === 'divorce' || el.style === 'separation') {
+                const mx = (el.x + el.x2)/2; const my = (el.y + el.y2)/2;
+                const a = Math.atan2(el.y2 - el.y, el.x2 - el.x);
+                const slash = (off) => {
+                    const sx = Math.cos(a+Math.PI/2)*10; const sy = Math.sin(a+Math.PI/2)*10;
+                    g.appendChild(createSVGElement("line", { x1: mx-sx+off, y1: my-sy, x2: mx+sx+off, y2: my+sy, stroke: color, "stroke-width": thick }));
+                }
+                slash(0);
+                if (el.style === 'divorce') { slash(-4); slash(4); } // 二重
+            }
+
+            if (state.selectedId === el.id) {
+                const hl = drawPath();
+                hl.setAttribute("stroke", "#3b82f6"); hl.setAttribute("stroke-width", thick + 8); hl.setAttribute("opacity", "0.2");
+                g.insertBefore(hl, g.firstChild);
+            }
+
+            lineGroup.appendChild(g);
+        }
+
+        function renderScribble(el) {
+            if (!el.points || el.points.length < 2) return;
+            let d = `M ${el.points[0].x} ${el.points[0].y}`;
+            el.points.forEach(p => d += ` L ${p.x} ${p.y}`);
+            const path = createSVGElement("path", { d: d, fill: "none", stroke: el.color || "black", "stroke-width": el.thickness || 2, "data-id": el.id, "stroke-linecap": "round", "stroke-linejoin": "round" });
+            
+            // Apply line style for scribble (dashed / dotted)
+            if (el.style === 'dashed') path.setAttribute("stroke-dasharray", "8,5");
+            if (el.style === 'dotted') path.setAttribute("stroke-dasharray", "2,4");
+
+            if (state.selectedId === el.id) {
+                const hl = path.cloneNode();
+                hl.setAttribute("stroke", "#3b82f6"); hl.setAttribute("stroke-width", (el.thickness||2) + 6); hl.setAttribute("opacity", "0.3");
+                hl.removeAttribute("stroke-dasharray"); // Highlight is always solid
+                scribbleGroup.appendChild(hl);
+            }
+            scribbleGroup.appendChild(path);
+        }
+
+        function updateEditorUI() {
+            const sel = state.elements.find(e => e.id === state.selectedId);
+            if (sel) {
+                propEditor.classList.remove('hidden');
+                inputs.text.value = sel.text || "";
+                inputs.age.value = sel.age || "";
+                inputs.size.value = sel.w || 50;
+                inputs.color.value = sel.color || "#000000";
+                inputs.thickness.value = sel.thickness || 2;
+                inputs.fontSize.value = sel.fontSize || 16;
+                inputs.fontWeight.value = sel.fontWeight || "normal";
+                inputs.lineStyle.value = sel.style || "solid";
+
+                const isLine = sel.type === 'line';
+                const isScribble = sel.type === 'scribble';
+                const isText = sel.type === 'text';
+                const isShape = !isLine && !isText && !isScribble && sel.type !== 'doubleslash';
+
+                // Both Line and Scribble can show line styles
+                document.getElementById('lineStyles').classList.toggle('hidden', !isLine && !isScribble);
+                document.getElementById('sizeField').classList.toggle('hidden', isLine || isText || isScribble);
+                document.getElementById('fontSizeField').classList.toggle('hidden', !isText && !isShape);
+                document.getElementById('textFieldsGroup').classList.toggle('hidden', isLine || isScribble);
+                document.getElementById('ageField').classList.toggle('hidden', !isShape);
+            } else {
+                propEditor.classList.add('hidden');
+            }
+        }
+
+        // --- Event Handlers ---
+        svg.addEventListener('mousedown', (e) => {
+            const rect = svg.getBoundingClientRect();
+            const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+            const target = e.target.closest('[data-id]');
+            const isResizer = e.target.dataset.role === 'resizer';
+
+            if (state.currentTool === 'select') {
+                if (isResizer) {
+                    state.isResizing = true;
+                    state.dragTarget = state.elements.find(el => el.id === state.selectedId);
+                } else if (target) {
+                    state.selectedId = parseInt(target.dataset.id);
+                    state.isDragging = true;
+                    state.dragTarget = state.elements.find(el => el.id === state.selectedId);
+                    state.dragOffset = { x: x - (state.dragTarget.x || 0), y: y - (state.dragTarget.y || 0) };
+                } else {
+                    state.selectedId = null;
+                }
+            } else if (state.currentTool === 'scribble') {
+                const newId = state.nextId++;
+                const newEl = { id: newId, type: 'scribble', points: [{x, y}], style: 'solid', color: '#000000', thickness: 2 };
+                state.elements.push(newEl); state.selectedId = newId; state.isDrawing = true; state.dragTarget = newEl;
+            } else if (state.currentTool === 'line') {
+                const newId = state.nextId++;
+                const newEl = { id: newId, type: 'line', x, y, x2: x, y2: y, style: 'solid', color: '#000000', thickness: 2 };
+                state.elements.push(newEl); state.selectedId = newId; state.isDrawing = true; state.dragTarget = newEl;
+            } else {
+                // Add Shapes
+                const newId = state.nextId++;
+                let w = 50, h = 50;
+                if (['filledci', 'filledsq', 'cross', 'doubleslash'].includes(state.currentTool)) { w = 24; h = 24; }
+                else if (state.currentTool === 'diamond') { w = 40; h = 40; }
+
+                state.elements.push({
+                    id: newId, type: state.currentTool,
+                    x: x - w/2, y: y - h/2, w: w, h: h, 
+                    color: '#000000', thickness: 2, fontSize: 14, fontWeight: 'normal',
+                    text: state.currentTool === 'text' ? 'テキスト' : ''
+                });
+                state.selectedId = newId;
+            }
+            render();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!state.dragTarget) return;
+            const rect = svg.getBoundingClientRect();
+            const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+
+            if (state.isResizing) {
+                state.dragTarget.w = Math.max(10, x - state.dragTarget.x);
+                state.dragTarget.h = Math.max(10, y - state.dragTarget.y);
+            } else if (state.isDrawing) {
+                if (state.dragTarget.type === 'line') { state.dragTarget.x2 = x; state.dragTarget.y2 = y; }
+                else if (state.dragTarget.type === 'scribble') { state.dragTarget.points.push({x, y}); }
+            } else if (state.isDragging) {
+                state.dragTarget.x = x - state.dragOffset.x;
+                state.dragTarget.y = y - state.dragOffset.y;
+            }
+            render();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (state.currentTool !== 'select' && state.isDrawing || state.dragTarget) {
+                changeTool('select');
+            }
+            state.isDragging = false; state.isResizing = false; state.isDrawing = false;
+            state.dragTarget = null;
+        });
+
+        // Toolbar Buttons
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', () => changeTool(btn.dataset.tool));
+        });
+
+        document.getElementById('btnDelete').addEventListener('click', () => {
+            state.elements = state.elements.filter(el => el.id !== state.selectedId);
+            state.selectedId = null; render();
+        });
+
+        // Property Listeners
+        const updateProp = (key, val, requiresRender = true) => {
+            if(state.selectedId) {
+                state.elements.find(el => el.id === state.selectedId)[key] = val;
+                if(requiresRender) render();
+            }
+        };
+
+        inputs.text.addEventListener('input', e => updateProp('text', e.target.value));
+        inputs.age.addEventListener('input', e => updateProp('age', e.target.value));
+        inputs.color.addEventListener('input', e => updateProp('color', e.target.value));
+        inputs.thickness.addEventListener('input', e => updateProp('thickness', parseInt(e.target.value)));
+        inputs.fontSize.addEventListener('input', e => updateProp('fontSize', parseInt(e.target.value)));
+        inputs.fontWeight.addEventListener('change', e => updateProp('fontWeight', e.target.value));
+        inputs.lineStyle.addEventListener('change', e => updateProp('style', e.target.value));
+
+        // Aspect-ratio preserving size slider
+        inputs.size.addEventListener('input', e => {
+            if(state.selectedId) {
+                const el = state.elements.find(el => el.id === state.selectedId);
+                const newW = parseInt(e.target.value);
+                if (el.w && el.h) {
+                    const ratio = el.h / el.w;
+                    el.w = newW; el.h = newW * ratio;
+                }
+                render();
+            }
+        });
+
+        // Save / Load
+        document.getElementById('btnExport').addEventListener('click', () => {
+            const data = JSON.stringify(state.elements);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([data], {type: 'application/json'}));
+            
+            const nameInput = document.getElementById('exportName').value.trim();
+            const baseName = nameInput ? nameInput : 'genogram';
+            
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const dateStr = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+            
+            a.download = `${baseName}_${dateStr}.json`;
+            a.click();
+        });
+
+        document.getElementById('btnImport').addEventListener('click', () => document.getElementById('fileInput').click());
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            
+            // ファイル名から氏名を抽出 (フォーマット: 氏名_YYYYMMDD_HHMMSS.json)
+            const match = file.name.match(/^(.*?)_\d{8}_\d{6}\.json$/i);
+            if (match && match[1] && match[1] !== 'genogram') {
+                document.getElementById('exportName').value = match[1];
+            }
+
+            const reader = new FileReader();
+            reader.onload = (ev) => { 
+                try {
+                    state.elements = JSON.parse(ev.target.result); 
+                    state.selectedId = null;
+                    render(); 
+                } catch (err) {
+                    alert('ファイルの読み込みに失敗しました。');
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = ''; // 同じファイルを再選択できるようにリセット
+        });
+
+        render();
+    </script>
+</body>
+</html>
